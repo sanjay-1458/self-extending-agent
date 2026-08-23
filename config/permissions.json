@@ -1,0 +1,17 @@
+{
+  "filesystem_read": true,
+  "filesystem_write": true,
+  "modify_own_code": true,
+  "execute_code": true,
+  "install_packages": true,
+  "browser": true,
+  "internet": true,
+  "git_commit": true,
+  "git_push": true,
+  "create_local_database": true,
+  "redis_read": true,
+  "redis_write": true,
+  "send_email": false,
+  "create_cloud_resources": false,
+  "payments": false
+}
