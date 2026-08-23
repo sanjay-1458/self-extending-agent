@@ -19,7 +19,7 @@
     "dotenv": "latest",
     "pino": "latest",
     "pino-pretty": "latest",
-    "playwright": "latest",
+    "playwright": "^1.62.1",
     "redis": "^6.2.1",
     "zod": "latest"
   },
