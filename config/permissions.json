@@ -13,5 +13,7 @@
   "redis_write": true,
   "send_email": false,
   "create_cloud_resources": false,
-  "payments": false
+  "payments": false,
+  "read_file": true,
+  "write_file": true
 }
