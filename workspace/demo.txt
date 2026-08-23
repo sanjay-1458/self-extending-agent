@@ -1,0 +1,2 @@
+hello this is a simple demo file
+the autonomous agent should count these words

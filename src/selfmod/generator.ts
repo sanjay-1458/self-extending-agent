@@ -1,5 +1,9 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { GeneratedCapabilitySchema, type PlannerDecision } from "../types.js";
+import {
+  GeneratedCapabilitySchema,
+  type GeneratedCapability,
+  type PlannerDecision,
+} from "../types.js";
 import { createModel } from "../llm/model.js";
 import { logger } from "../logging/logger.js";
 
@@ -24,10 +28,13 @@ MANDATORY SOURCE CONTRACT:
 - For a real external action, tests should validate logic without actually sending money/email/deleting data.
 - Do not wrap code in Markdown fences.`;
 
-export async function generateCapability(decision: PlannerDecision, priorFailure?: string) {
+export async function generateCapability(
+  decision: PlannerDecision,
+  priorFailure?: string
+): Promise<GeneratedCapability> {
   const model = createModel().withStructuredOutput(GeneratedCapabilitySchema);
   logger.info({ capability: decision.capabilityName }, "[codegen] generating capability");
-  return model.invoke([
+  const rawGenerated = await model.invoke([
     new SystemMessage(SYSTEM),
     new HumanMessage(JSON.stringify({
       requestedName: decision.capabilityName,
@@ -38,4 +45,8 @@ export async function generateCapability(decision: PlannerDecision, priorFailure
       priorFailure,
     })),
   ]);
+
+  // Normalize Gemini/LangChain structured output and apply
+  // Zod defaults such as npmPackages: [].
+  return GeneratedCapabilitySchema.parse(rawGenerated);
 }

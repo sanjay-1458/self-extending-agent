@@ -20,7 +20,7 @@
     "pino": "latest",
     "pino-pretty": "latest",
     "playwright": "latest",
-    "redis": "latest",
+    "redis": "^6.2.1",
     "zod": "latest"
   },
   "devDependencies": {

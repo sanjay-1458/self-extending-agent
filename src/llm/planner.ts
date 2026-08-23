@@ -1,5 +1,10 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { PlannerDecisionSchema, type AgentTask, type Capability } from "../types.js";
+import {
+  PlannerDecisionSchema,
+  type AgentTask,
+  type Capability,
+  type PlannerDecision,
+} from "../types.js";
 import { createModel } from "./model.js";
 import { logger } from "../logging/logger.js";
 
@@ -17,7 +22,10 @@ Rules:
 - inputJson must be valid JSON text.
 - Keep reasoningSummary short; do not output private chain-of-thought.`;
 
-export async function chooseNextAction(task: AgentTask, capabilities: Capability[]) {
+export async function chooseNextAction(
+  task: AgentTask,
+  capabilities: Capability[]
+): Promise<PlannerDecision> {
   const model = createModel().withStructuredOutput(PlannerDecisionSchema);
   const capabilitySummary = capabilities.map((c) => ({
     name: c.name,
@@ -27,7 +35,7 @@ export async function chooseNextAction(task: AgentTask, capabilities: Capability
   }));
 
   logger.info({ taskId: task.id, capabilityCount: capabilities.length }, "[planner] asking Gemini for next action");
-  const decision = await model.invoke([
+  const rawDecision = await model.invoke([
     new SystemMessage(SYSTEM),
     new HumanMessage(JSON.stringify({
       originalGoal: task.originalGoal,
@@ -38,6 +46,11 @@ export async function chooseNextAction(task: AgentTask, capabilities: Capability
       existingCapabilities: capabilitySummary,
     })),
   ]);
+
+  // Parse again with Zod so defaults like [], {}, etc. are
+  // guaranteed to exist before the rest of the agent uses them.
+  const decision = PlannerDecisionSchema.parse(rawDecision);
+
   logger.info({ taskId: task.id, decision }, "[planner] decision");
   return decision;
 }
