@@ -15,5 +15,6 @@
   "create_cloud_resources": false,
   "payments": false,
   "read_file": true,
-  "write_file": true
+  "write_file": true,
+  "network_access": true
 }
