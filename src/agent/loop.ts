@@ -44,6 +44,33 @@ export async function runAgent(task: AgentTask, maxTurns = Math.max(30, Number.p
       await saveTask(task);
 
       if (decision.action === "COMPLETE") {
+      if (process.env.FDE_AUTONOMOUS_MODE === "true") {
+        const lastObservation =
+          task.observations[task.observations.length - 1] ?? "";
+
+        if (!lastObservation.includes("FDE_ACCEPTANCE_OK")) {
+          const message =
+            "Completion rejected by runtime: FDE production tasks may " +
+            "only COMPLETE immediately after the deterministic acceptance " +
+            "checker returns FDE_ACCEPTANCE_OK. Run " +
+            "/home/daytona/workspace/self-extending-agent/workspace/" +
+            "fde-acceptance.sh with shell_exec, repair every failure, " +
+            "and rerun it until it passes.";
+
+          task.failedAttempts.push(message);
+
+          logger.warn(
+            {
+              taskId: task.id,
+            },
+            "[agent] rejected premature COMPLETE",
+          );
+
+          await saveTask(task);
+          continue;
+        }
+      }
+
         task.status = "COMPLETED";
         task.currentStep = null;
         task.observations.push(`COMPLETED: ${decision.completionMessage ?? "Goal completed"}`);

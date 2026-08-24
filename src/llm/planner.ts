@@ -162,6 +162,25 @@ RULES:
 - COMPLETE only when the original goal and its acceptance
   conditions are genuinely verified.
 
+- HARD FDE COMPLETION RULE:
+  When FDE_AUTONOMOUS_MODE=true, the final action before COMPLETE
+  MUST be USE_CAPABILITY shell_exec with exactly this acceptance
+  checker:
+
+  /home/daytona/workspace/self-extending-agent/workspace/fde-acceptance.sh
+
+  Do not COMPLETE unless its result contains:
+
+  FDE_ACCEPTANCE_OK
+
+  If the acceptance script fails, its failure message is the next
+  engineering task. Repair that issue, rerun the checker, and repeat.
+
+  Never infer completion from file existence, plausible output,
+  previous successful commands, or your own judgment.
+
+  FDE_ACCEPTANCE_OK is the authoritative completion signal.
+
 Keep reasoningSummary short.
 Do not output private chain-of-thought.
 `;
