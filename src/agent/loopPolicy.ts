@@ -104,11 +104,38 @@ export function compactObservations(
 export function compactFailures(
   values: string[],
 ): string[] {
-  return values
-    .slice(-8)
-    .map((value) =>
-      clip(value, 1800),
+  const recent =
+    values.slice(-8);
+
+  const seen =
+    new Map<string, number>();
+
+  const result: string[] = [];
+
+  for (const value of recent) {
+    const fingerprint =
+      failureFingerprint(value);
+
+    const count =
+      (seen.get(fingerprint) ?? 0) + 1;
+
+    seen.set(
+      fingerprint,
+      count,
     );
+
+    if (count === 1) {
+      result.push(
+        clip(value, 1400),
+      );
+    } else {
+      result.push(
+        `[REPEATED_FAILURE x${count}] ${fingerprint}`,
+      );
+    }
+  }
+
+  return result;
 }
 
 function extractShellCommandFromDecision(
@@ -176,6 +203,36 @@ function extractShellCommandFromObservation(
   }
 
   return null;
+}
+
+function extractShellCommandFromFailure(
+  failure: string,
+): string | null {
+  const line = failure
+    .split("\n")
+    .find((value) =>
+      value.startsWith(
+        "WORK_PACKET_COMMAND_JSON:",
+      ),
+    );
+
+  if (!line) {
+    return null;
+  }
+
+  const raw = line.slice(
+    "WORK_PACKET_COMMAND_JSON:".length,
+  );
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    return typeof parsed === "string"
+      ? parsed.trim()
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function commandKey(
@@ -356,7 +413,7 @@ export function guardDecision(
     };
   }
 
-  const recentCommands =
+  const successfulCommands =
     task.observations
       .slice(-12)
       .map(
@@ -368,6 +425,24 @@ export function guardDecision(
         ): value is string =>
           Boolean(value),
       );
+
+  const failedCommands =
+    task.failedAttempts
+      .slice(-12)
+      .map(
+        extractShellCommandFromFailure,
+      )
+      .filter(
+        (
+          value,
+        ): value is string =>
+          Boolean(value),
+      );
+
+  const recentCommands = [
+    ...successfulCommands,
+    ...failedCommands,
+  ];
 
   const proposedKey =
     commandKey(command);
@@ -381,9 +456,9 @@ export function guardDecision(
         key === proposedKey,
     ).length;
 
-  // Proposed operation would be the 4th equivalent attempt.
+  // After two equivalent recent attempts, force a strategy change.
   if (
-    sameOperationCount >= 3
+    sameOperationCount >= 2
   ) {
     return {
       ok: false,
@@ -414,4 +489,77 @@ export function guardDecision(
   }
 
   return { ok: true };
+}
+
+function failureFingerprint(
+  failure: string,
+): string {
+  const lines = failure
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const meaningful =
+    lines.filter((line) =>
+      /^(?:TypeError|ReferenceError|SyntaxError|RangeError|KeyError|ValueError|ImportError|ModuleNotFoundError|AssertionError|Error):/i.test(
+        line,
+      ),
+    );
+
+  const selected =
+    meaningful.at(-1) ??
+    lines.at(-1) ??
+    "unknown failure";
+
+  return selected
+    .replace(
+      /\/home\/daytona\/[^\s:)]+/g,
+      "<PATH>",
+    )
+    .replace(
+      /line \d+/gi,
+      "line <N>",
+    )
+    .replace(
+      /\b\d{4,}\b/g,
+      "<N>",
+    )
+    .slice(0, 500);
+}
+
+export function summarizeFailurePatterns(
+  failures: string[],
+): Array<{
+  fingerprint: string;
+  count: number;
+}> {
+  const counts =
+    new Map<string, number>();
+
+  for (
+    const failure of failures.slice(-12)
+  ) {
+    const fingerprint =
+      failureFingerprint(failure);
+
+    counts.set(
+      fingerprint,
+      (counts.get(fingerprint) ?? 0) + 1,
+    );
+  }
+
+  return [...counts.entries()]
+    .map(
+      ([fingerprint, count]) => ({
+        fingerprint,
+        count,
+      }),
+    )
+    .filter(
+      ({ count }) => count >= 2,
+    )
+    .sort(
+      (a, b) =>
+        b.count - a.count,
+    );
 }

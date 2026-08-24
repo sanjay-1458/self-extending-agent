@@ -14,6 +14,7 @@ import {
   compactGoal,
   compactObservations,
   guardDecision,
+  summarizeFailurePatterns,
 } from "../agent/loopPolicy.js";
 
 import { createModel } from "./model.js";
@@ -119,6 +120,35 @@ placeholder implementation
 unless the ORIGINAL USER explicitly requested a scaffold-only task.
 
 A file existing is not progress if its required behavior is not implemented.
+
+==================================================
+REPEATED FAILURE FINGERPRINTS
+==================================================
+
+The input may contain repeatedFailurePatterns.
+
+If the SAME failure fingerprint occurred 2 or more times:
+
+DO NOT simply rerun the failing operation.
+
+Read the terminal/root exception carefully.
+
+Separate:
+
+SYMPTOM
+from
+ROOT CAUSE.
+
+The next work packet must materially change the code/configuration
+responsible for that root cause BEFORE rerunning the failed verifier.
+
+Do not modify an unrelated configuration merely because it is near
+the failing subsystem.
+
+If one strategy produces the same fingerprint repeatedly, abandon
+that strategy.
+
+A different command string is NOT necessarily a different strategy.
 
 ==================================================
 FAILURE-DRIVEN DEVELOPMENT
@@ -404,6 +434,11 @@ export async function chooseNextAction(
 
                 recentFailures:
                   compactFailures(
+                    task.failedAttempts,
+                  ),
+
+                repeatedFailurePatterns:
+                  summarizeFailurePatterns(
                     task.failedAttempts,
                   ),
 

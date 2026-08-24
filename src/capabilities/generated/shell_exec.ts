@@ -106,6 +106,7 @@ export async function run(input: unknown): Promise<unknown> {
   if (result.code !== 0 || applicationFailure) {
     throw new Error(
       [
+        `WORK_PACKET_COMMAND_JSON:${JSON.stringify(command)}`,
         `Command failed with code ${result.code}`,
         result.stderr,
         result.stdout,
