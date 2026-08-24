@@ -21,6 +21,20 @@ export async function run(input: unknown): Promise<unknown> {
 
   const command = (input as ShellInput).command.trim();
 
+  const placeholderImplementation =
+    process.env.FDE_AUTONOMOUS_MODE === "true" &&
+    /(?:logic will go here|TODO:\s*implement|FIXME:\s*implement|NotImplementedError|placeholder implementation|implement later)/i.test(
+      command,
+    );
+
+  if (placeholderImplementation) {
+    throw new Error(
+      "Placeholder implementation rejected. " +
+      "Production autonomous mode requires real implementation " +
+      "and executable verification."
+    );
+  }
+
   // Pi must be integrated through its public SDK factory.
   // Direct AgentSession construction caused a repeated dependency-internal loop.
   const forbiddenDirectPiConstruction =

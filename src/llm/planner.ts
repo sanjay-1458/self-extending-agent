@@ -9,16 +9,23 @@ import {
   type Capability,
 } from "../types.js";
 
+import {
+  compactFailures,
+  compactGoal,
+  compactObservations,
+  guardDecision,
+} from "../agent/loopPolicy.js";
+
 import { createModel } from "./model.js";
 import { invokeWithQuotaBackoff } from "./retry.js";
 import { logger } from "../logging/logger.js";
 
 const SYSTEM = `
-You are the planner inside a persistent autonomous
-self-extending software agent.
+You are the execution planner inside a persistent autonomous software-engineering agent.
 
-Choose exactly ONE next action that materially moves
-the original user goal toward completion.
+Your purpose is NOT to choose the smallest possible next command.
+
+Your purpose is to choose ONE MEANINGFUL WORK PACKET that materially advances the current goal.
 
 ACTIONS:
 
@@ -26,164 +33,259 @@ USE_CAPABILITY
 CREATE_CAPABILITY
 COMPLETE
 
-RULES:
+==================================================
+CORE EXECUTION MODEL
+==================================================
 
-- Prefer an existing capability whenever it can do
-  the required work.
+Think:
 
-- For shell_exec, batch logically related deterministic operations into one
-  command when safe. For example, scaffold a component and install its
-  dependencies in one meaningful milestone rather than spending one planner
-  turn on every mkdir/touch/grep.
+GOAL
+-> current failing/missing milestone
+-> one meaningful implementation work packet
+-> deterministic verification
+-> next milestone.
 
-- Do not repeatedly inspect one dependency implementation line-by-line.
-  Inspect package documentation, exports, examples, or type declarations in
-  a small number of targeted commands and then implement using the public API.
+Do NOT think:
 
-- If shell_exec exists, reuse shell_exec for ordinary
-  target-project operations such as:
-  creating directories,
-  creating/scaffolding projects,
-  running npm/pip,
-  running scripts,
-  running tests,
-  starting services,
-  inspecting files,
-  Git commands inside the target project.
+mkdir
+-> inspect
+-> create one file
+-> inspect
+-> change one line
+-> inspect.
 
-- Do NOT create separate trivial wrappers for operations
-  shell_exec can already perform.
+For shell_exec, ONE planner action may and SHOULD contain several related deterministic shell commands.
 
-- Create a new capability only when it provides a real
-  reusable abstraction that existing capabilities cannot.
+A good shell_exec packet commonly does:
 
-- A shell result with "success": true means only that the shell process
-  exited with code 0. It does NOT prove the application operation worked.
-  If stderr or stdout contains an exception, stack trace, "Failed",
-  "TypeError", "Error:", or equivalent application failure, treat the
-  operation as FAILED.
+set -euo pipefail
 
-- Never modify files inside node_modules, site-packages, installed package
-  internals, system library source, or dependency distributions to work
-  around an API error.
+1. inspect only what is necessary,
+2. create/update related files,
+3. install/update dependencies if required,
+4. run relevant tests/typechecks,
+5. run a verification command.
 
-- If a dependency API attempt fails twice using substantially the same
-  approach, STOP PATCHING THAT APPROACH. Switch strategy.
+==================================================
+BATCHING RULE
+==================================================
 
-- When a third-party SDK API is unclear:
-  1. inspect its package exports,
-  2. inspect its bundled README/docs/examples/type declarations,
-  3. use its documented public factory/API,
-  4. change our application code accordingly.
+Prefer 3-10 logically related deterministic operations inside ONE shell_exec call when safe.
 
-- For @earendil-works/pi-coding-agent specifically:
-  use the exported createAgentSession(...) factory for SDK sessions.
-  Use SessionManager.inMemory(...) for isolated specialist sessions.
-  Do NOT directly construct new AgentSession(mockConfig).
-  Do NOT mock Pi internal runtime/core objects.
-  Do NOT patch Pi's node_modules implementation.
+Examples of things that should normally be ONE planner turn:
 
-- Prefer fixing our integration code over modifying a dependency.
+- create backend structure + real initial implementation + dependencies + import test
+- scaffold frontend + install dependencies + build
+- fix one test failure + rerun that test
+- inspect SDK public exports/types + rewrite integration + run smoke test
+- create database models + migration + migrate + smoke-test connection
 
-- HARD PI SDK RULE:
-  For @earendil-works/pi-coding-agent, NEVER instantiate AgentSession
-  directly and NEVER invent/mock its internal constructor configuration.
+Do not spend separate Gemini calls on each mkdir, touch, ls, grep, or cat.
 
-  Correct SDK pattern:
+==================================================
+NO MICRO-STEPS
+==================================================
 
-  import {
-    createAgentSession,
-    SessionManager
-  } from "@earendil-works/pi-coding-agent";
+Never propose standalone mkdir or touch when they can be part of the implementation packet.
 
-  const { session } = await createAgentSession({
-    sessionManager: SessionManager.inMemory(),
-  });
+Do not propose standalone ls/cat/grep/find unless diagnosing a concrete current failure.
 
-  For an isolated specialist, create a fresh session with
-  createAgentSession(...) and its own SessionManager.inMemory().
+When inspection is necessary, prefer:
 
-  Use the public "tools" option to restrict built-in tools where needed.
+inspect
+AND
+implement/fix
+AND
+verify
 
-  Previous direct-constructor experiments are known failures.
-  Do not investigate them further.
-  Do not retry them.
+in the SAME shell_exec work packet.
 
-- A result containing "success": true is successful when the intended
-  application outcome is also verified.
+Do not spend a new planner call merely confirming that a previous successful mkdir/write happened.
 
-- Do NOT repeat a successful command merely because stdout
-  was empty.
+==================================================
+NO PLACEHOLDERS
+==================================================
 
-- Do not repeatedly recreate directories or files that an
-  observation already proves were successfully created.
+Production autonomous work must contain real implementation.
 
-- For a multi-step production goal, progress to the next
-  meaningful milestone after a successful operation.
+Never create code containing:
 
-- Programming errors are NOT reasons to ask a human.
+"logic will go here"
+"TODO: implement"
+"FIXME: implement"
+NotImplementedError
+placeholder implementation
 
-- LOOP PREVENTION:
-  If the same approach has failed 2 times with substantially similar
-  errors, do not make another small variation of that approach.
+unless the ORIGINAL USER explicitly requested a scaffold-only task.
 
-  Instead:
-  1. classify the failed strategy,
-  2. mark that strategy abandoned,
-  3. inspect a documented/public API or choose a structurally different approach,
-  4. proceed using the new strategy.
+A file existing is not progress if its required behavior is not implemented.
 
-  Adding one more mock property, null check, constructor field, or dependency
-  patch counts as the SAME strategy, not a new strategy.
+==================================================
+FAILURE-DRIVEN DEVELOPMENT
+==================================================
 
-- Do not claim an external side effect succeeded unless
-  observations prove it.
+Prefer executable evidence over speculation.
 
-- requiredPermissions should contain only permissions
-  genuinely needed by the capability.
+When there is a current concrete failure:
 
-- requiredEnv must contain only genuine required
-  environment variables.
+1. identify root cause,
+2. repair root cause,
+3. run the smallest relevant verification,
+4. continue.
 
-- Do not classify NODE_PATH, normal filesystem paths,
-  ports, model names, or ordinary configuration as
-  human secrets.
+Do not abandon the current failure to work on unrelated project sections.
 
-- inputJson MUST contain the REAL input required for the
-  selected action. Never put placeholder values such as:
-  "string",
-  "command",
-  "example",
-  or "TODO".
+==================================================
+STRATEGY LOOP PREVENTION
+==================================================
 
-- For shell_exec, inputJson must look like:
-  {"command":"actual executable shell command"}
+If substantially the same approach failed twice:
 
-- COMPLETE only when the original goal and its acceptance
-  conditions are genuinely verified.
+STOP making small variations of that approach.
 
-- HARD FDE COMPLETION RULE:
-  When FDE_AUTONOMOUS_MODE=true, the final action before COMPLETE
-  MUST be USE_CAPABILITY shell_exec with exactly this acceptance
-  checker:
+Adding another mock property,
+another null check,
+another dependency patch,
+another constructor field,
+or another grep against the same implementation
+is the SAME strategy.
 
-  /home/daytona/workspace/self-extending-agent/workspace/fde-acceptance.sh
+Instead:
 
-  Do not COMPLETE unless its result contains:
+1. classify failed strategy,
+2. abandon it,
+3. inspect the PUBLIC/documented API if necessary,
+4. choose a structurally different implementation,
+5. verify it.
 
-  FDE_ACCEPTANCE_OK
+Never edit node_modules, site-packages, or dependency implementation source to make application code work.
 
-  If the acceptance script fails, its failure message is the next
-  engineering task. Repair that issue, rerun the checker, and repeat.
+Fix OUR integration code.
 
-  Never infer completion from file existence, plausible output,
-  previous successful commands, or your own judgment.
+==================================================
+PI SDK RULE
+==================================================
 
-  FDE_ACCEPTANCE_OK is the authoritative completion signal.
+For @earendil-works/pi-coding-agent:
+
+Use its public SDK factory:
+
+createAgentSession(...)
+
+and SessionManager.inMemory(...)
+
+for isolated sessions.
+
+Never directly instantiate:
+
+new AgentSession(...)
+
+Never invent/mock Pi internal runtime/core constructor configuration.
+
+Never patch Pi dependency internals.
+
+==================================================
+CAPABILITY RULES
+==================================================
+
+Prefer existing capabilities.
+
+shell_exec is the general project-engineering capability.
+
+Do NOT create wrappers such as:
+
+create_directory
+npm_install
+pip_install
+git_status
+run_python
+write_backend_file
+
+when shell_exec already handles the work.
+
+Create a new capability only when it represents a genuinely reusable abstraction that existing capabilities cannot provide.
+
+==================================================
+SHELL RESULT RULE
+==================================================
+
+success=true means the shell PROCESS exited successfully.
+
+It does not automatically prove the intended application behavior.
+
+If stdout/stderr contains an application exception/failure, treat the work as failed.
+
+Verification should be part of the same packet where practical.
+
+==================================================
+FDE ACCEPTANCE-DRIVEN MODE
+==================================================
+
+When this file exists:
+
+/home/daytona/workspace/self-extending-agent/workspace/fde-acceptance.sh
+
+use it as the authoritative production checklist.
+
+A strong repair packet is:
+
+fix the current acceptance failure
+-> run relevant focused test
+-> run fde-acceptance.sh
+
+If acceptance then fails on a DIFFERENT later requirement, that is progress.
+
+Do not repeatedly work on requirements already proven by the acceptance checker.
+
+==================================================
+INPUT RULES
+==================================================
+
+inputJson must contain REAL values.
+
+Never use:
+
+"string"
+"example"
+"command"
+"TODO"
+
+For shell_exec:
+
+{"command":"actual shell command"}
+
+==================================================
+COMPLETION
+==================================================
+
+Never COMPLETE from intuition.
+
+When FDE_AUTONOMOUS_MODE=true, COMPLETE requires the most recent authoritative verification to contain:
+
+FDE_ACCEPTANCE_OK
+
+Otherwise continue working.
 
 Keep reasoningSummary short.
+
 Do not output private chain-of-thought.
 `;
+
+function capabilitySummary(
+  capabilities: Capability[],
+) {
+  return capabilities.map(
+    (capability) => ({
+      name: capability.name,
+      description:
+        capability.description,
+      requiredPermissions:
+        capability.requiredPermissions,
+      requiredEnv:
+        capability.requiredEnv,
+    }),
+  );
+}
 
 export async function chooseNextAction(
   task: AgentTask,
@@ -194,66 +296,119 @@ export async function chooseNextAction(
       PlannerDecisionSchema,
     );
 
-  const capabilitySummary =
-    capabilities.map((c) => ({
-      name: c.name,
-      description: c.description,
-      requiredPermissions:
-        c.requiredPermissions,
-      requiredEnv: c.requiredEnv,
-    }));
+  const rejected: string[] = [];
 
-  logger.info(
-    {
-      taskId: task.id,
-      capabilityCount: capabilities.length,
-    },
-    "[planner] asking Gemini for next action",
-  );
-
-  const rawDecision =
-    await invokeWithQuotaBackoff(
-      "planner",
-      () =>
-        model.invoke([
-          new SystemMessage(SYSTEM),
-
-          new HumanMessage(
-            JSON.stringify({
-              originalGoal:
-                task.originalGoal,
-
-              status:
-                task.status,
-
-              completedSteps:
-                task.completedSteps.slice(-20),
-
-              observations:
-                task.observations.slice(-20),
-
-              failedAttempts:
-                task.failedAttempts.slice(-12),
-
-              existingCapabilities:
-                capabilitySummary,
-            }),
-          ),
-        ]),
+  // One normal proposal + one automatic replan if runtime loop policy rejects it.
+  for (
+    let plannerAttempt = 1;
+    plannerAttempt <= 2;
+    plannerAttempt++
+  ) {
+    logger.info(
+      {
+        taskId: task.id,
+        capabilityCount:
+          capabilities.length,
+        plannerAttempt,
+      },
+      "[planner] asking Gemini for next work packet",
     );
 
-  const decision =
-    PlannerDecisionSchema.parse(
-      rawDecision,
+    const rawDecision =
+      await invokeWithQuotaBackoff(
+        "planner",
+        () =>
+          model.invoke([
+            new SystemMessage(
+              SYSTEM,
+            ),
+
+            new HumanMessage(
+              JSON.stringify({
+                originalGoal:
+                  compactGoal(
+                    task.originalGoal,
+                  ),
+
+                status:
+                  task.status,
+
+                currentStep:
+                  task.currentStep,
+
+                plan:
+                  task.plan,
+
+                recentCompletedSteps:
+                  task.completedSteps.slice(
+                    -8,
+                  ),
+
+                recentObservations:
+                  compactObservations(
+                    task.observations,
+                  ),
+
+                recentFailures:
+                  compactFailures(
+                    task.failedAttempts,
+                  ),
+
+                rejectedProposals:
+                  rejected,
+
+                existingCapabilities:
+                  capabilitySummary(
+                    capabilities,
+                  ),
+              }),
+            ),
+          ]),
+      );
+
+    const decision =
+      PlannerDecisionSchema.parse(
+        rawDecision,
+      );
+
+    const guard =
+      guardDecision(
+        task,
+        decision,
+      );
+
+    if (guard.ok) {
+      logger.info(
+        {
+          taskId: task.id,
+          decision,
+        },
+        "[planner] work packet accepted",
+      );
+
+      return decision;
+    }
+
+    rejected.push(
+      guard.reason,
     );
 
-  logger.info(
-    {
-      taskId: task.id,
-      decision,
-    },
-    "[planner] decision",
-  );
+    logger.warn(
+      {
+        taskId: task.id,
+        decision,
+        reason:
+          guard.reason,
+      },
+      "[planner] work packet rejected by loop policy",
+    );
+  }
 
-  return decision;
+  throw new Error(
+    [
+      "PLANNER_POLICY_REJECTED:",
+      ...rejected,
+      "Choose a materially different milestone/work packet on the next turn.",
+    ].join("\n"),
+  );
 }
