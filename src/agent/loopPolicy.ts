@@ -389,6 +389,26 @@ export function guardDecision(
   }
 
   if (
+    process.env.FDE_AUTONOMOUS_MODE === "true"
+  ) {
+    const summary =
+      decision.reasoningSummary ?? "";
+
+    const vagueReverification =
+      /(?:verify|confirm|check|ensure).{0,40}(?:again|once more|foundation|integrity|still works|solid)/i.test(
+        summary,
+      );
+
+    if (vagueReverification) {
+      return {
+        ok: false,
+        reason:
+          "REVERIFICATION_CHURN_REJECTED: Previously successful work must not be rechecked merely for confidence. Move to the current unmet acceptance requirement unless a new failure specifically requires regression testing.",
+      };
+    }
+  }
+
+  if (
     process.env
       .FDE_AUTONOMOUS_MODE ===
       "true" &&

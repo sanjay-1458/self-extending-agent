@@ -21,6 +21,31 @@ export async function run(input: unknown): Promise<unknown> {
 
   const command = (input as ShellInput).command.trim();
 
+  if (process.env.FDE_AUTONOMOUS_MODE === "true") {
+    const createsThrowawayVerifier =
+      /(?:>|tee\s+)(?:[^\n;&]*\/)?(?:verify_[A-Za-z0-9_-]+|test_db_setup)\.(?:py|js|ts)\b/i.test(
+        command,
+      );
+
+    if (createsThrowawayVerifier) {
+      throw new Error(
+        "THROWAWAY_VERIFICATION_REJECTED: Do not create ad-hoc verifier " +
+        "programs. Test the real application through persistent automated " +
+        "tests, actual service health checks, and fde-acceptance.sh."
+      );
+    }
+
+    const switchesProductionToSQLite =
+      /sqlite:\/\/\//i.test(command);
+
+    if (switchesProductionToSQLite) {
+      throw new Error(
+        "ARCHITECTURE_DRIFT_REJECTED: This production task requires " +
+        "PostgreSQL. Do not replace required PostgreSQL persistence with SQLite."
+      );
+    }
+  }
+
   /*
    * Unquoted heredocs such as <<EOF perform shell expansion.
    *

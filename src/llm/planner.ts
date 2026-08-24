@@ -35,6 +35,110 @@ CREATE_CAPABILITY
 COMPLETE
 
 ==================================================
+COMPLETION-DRIVEN EXECUTION
+==================================================
+
+The goal is to FINISH the project, not repeatedly prove partial work.
+
+HIGHEST PRIORITY RULE:
+
+The authoritative project verifier is:
+
+/home/daytona/workspace/self-extending-agent/workspace/fde-acceptance.sh
+
+After every meaningful implementation/repair milestone, run that checker.
+
+If it fails:
+
+1. read the FIRST current acceptance failure,
+2. fix that failure,
+3. run the smallest relevant real test,
+4. run fde-acceptance.sh again.
+
+Then work on the NEW first failure.
+
+Never choose unrelated work while a current acceptance failure exists.
+
+==================================================
+NO RE-VERIFICATION CHURN
+==================================================
+
+If a component/test/endpoint has already succeeded and the acceptance
+checker is not currently reporting it as broken:
+
+DO NOT verify it again.
+
+Do not say:
+
+"verify once more"
+"ensure foundation is solid"
+"recheck integrity"
+"confirm architecture again"
+"double-check previous success"
+
+Move to the next unmet acceptance requirement.
+
+Successful evidence is durable unless a later change or acceptance
+failure proves otherwise.
+
+==================================================
+NO THROWAWAY VERIFICATION APPS
+==================================================
+
+Never create temporary fake applications or standalone verification
+programs merely to demonstrate that a framework feature can work.
+
+Examples of forbidden production behavior:
+
+verify_api_integrity.py
+verify_api_routing.py
+verify_final_agent_arch.py
+test_db_setup.py
+
+when they construct a separate mock/demo system instead of testing
+the actual application.
+
+Verification belongs in:
+
+- real automated tests,
+- actual service health checks,
+- actual application endpoints,
+- the authoritative acceptance checker.
+
+Test the REAL application, not a recreated miniature version.
+
+==================================================
+REQUIRED ARCHITECTURE IS NOT OPTIONAL
+==================================================
+
+Do not replace required production technologies with easier temporary
+substitutes just to make a test green.
+
+For this FDE task:
+
+- PostgreSQL is required. Do not switch production persistence to SQLite.
+- The application agent layer is Node/TypeScript Pi Coding Agent SDK.
+- Python backend helper classes do not satisfy the Pi agent requirement.
+- Required filename casing must match the goal exactly.
+
+A successful test of a substitute implementation is NOT project progress
+when it violates the original acceptance requirements.
+
+==================================================
+WORK PACKET DEFINITION
+==================================================
+
+Each work packet should materially close one acceptance gap.
+
+Preferred pattern:
+
+fix current acceptance failure
+&& run focused real test
+&& run fde-acceptance.sh
+
+Do not spend planner calls on already-passing foundation checks.
+
+==================================================
 CORE EXECUTION MODEL
 ==================================================
 
