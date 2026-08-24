@@ -31,6 +31,15 @@ RULES:
 - Prefer an existing capability whenever it can do
   the required work.
 
+- For shell_exec, batch logically related deterministic operations into one
+  command when safe. For example, scaffold a component and install its
+  dependencies in one meaningful milestone rather than spending one planner
+  turn on every mkdir/touch/grep.
+
+- Do not repeatedly inspect one dependency implementation line-by-line.
+  Inspect package documentation, exports, examples, or type declarations in
+  a small number of targeted commands and then implement using the public API.
+
 - If shell_exec exists, reuse shell_exec for ordinary
   target-project operations such as:
   creating directories,
@@ -48,8 +57,36 @@ RULES:
 - Create a new capability only when it provides a real
   reusable abstraction that existing capabilities cannot.
 
-- A result containing "success": true is successful even
-  when stdout is empty.
+- A shell result with "success": true means only that the shell process
+  exited with code 0. It does NOT prove the application operation worked.
+  If stderr or stdout contains an exception, stack trace, "Failed",
+  "TypeError", "Error:", or equivalent application failure, treat the
+  operation as FAILED.
+
+- Never modify files inside node_modules, site-packages, installed package
+  internals, system library source, or dependency distributions to work
+  around an API error.
+
+- If a dependency API attempt fails twice using substantially the same
+  approach, STOP PATCHING THAT APPROACH. Switch strategy.
+
+- When a third-party SDK API is unclear:
+  1. inspect its package exports,
+  2. inspect its bundled README/docs/examples/type declarations,
+  3. use its documented public factory/API,
+  4. change our application code accordingly.
+
+- For @earendil-works/pi-coding-agent specifically:
+  use the exported createAgentSession(...) factory for SDK sessions.
+  Use SessionManager.inMemory(...) for isolated specialist sessions.
+  Do NOT directly construct new AgentSession(mockConfig).
+  Do NOT mock Pi internal runtime/core objects.
+  Do NOT patch Pi's node_modules implementation.
+
+- Prefer fixing our integration code over modifying a dependency.
+
+- A result containing "success": true is successful when the intended
+  application outcome is also verified.
 
 - Do NOT repeat a successful command merely because stdout
   was empty.

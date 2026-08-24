@@ -21,6 +21,18 @@ export async function run(input: unknown): Promise<unknown> {
 
   const command = (input as ShellInput).command.trim();
 
+  const mutatesDependencyInternals =
+    command.includes("node_modules/") &&
+    /(?:sed\s+-i|perl\s+-pi|rm\s+-|cat\s+.*>|echo\s+.*>|printf\s+.*>|cp\s+|mv\s+)/i.test(command);
+
+  if (mutatesDependencyInternals) {
+    throw new Error(
+      "Direct mutation of node_modules is forbidden. " +
+      "Use the dependency's documented public API, change application code, " +
+      "or reinstall/change the dependency version."
+    );
+  }
+
   const result = await runCommand(
     "/bin/bash",
     ["-lc", command],
