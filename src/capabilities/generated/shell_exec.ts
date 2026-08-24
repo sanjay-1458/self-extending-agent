@@ -21,6 +21,20 @@ export async function run(input: unknown): Promise<unknown> {
 
   const command = (input as ShellInput).command.trim();
 
+  // Pi must be integrated through its public SDK factory.
+  // Direct AgentSession construction caused a repeated dependency-internal loop.
+  const forbiddenDirectPiConstruction =
+    /new\s+AgentSession\s*\(/.test(command) ||
+    /import\s*\{[^}]*\bAgentSession\b[^}]*\}\s*from\s*['"]@earendil-works\/pi-coding-agent['"]/.test(command);
+
+  if (forbiddenDirectPiConstruction) {
+    throw new Error(
+      "Direct Pi AgentSession construction is forbidden. " +
+      "Use createAgentSession(...) with SessionManager.inMemory(...) " +
+      "from @earendil-works/pi-coding-agent."
+    );
+  }
+
   const mutatesDependencyInternals =
     command.includes("node_modules/") &&
     /(?:sed\s+-i|perl\s+-pi|rm\s+-|cat\s+.*>|echo\s+.*>|printf\s+.*>|cp\s+|mv\s+)/i.test(command);
@@ -43,7 +57,12 @@ export async function run(input: unknown): Promise<unknown> {
     },
   );
 
-  if (result.code !== 0) {
+  const applicationFailure =
+    /(?:TypeError|ReferenceError|SyntaxError|RangeError|Unhandled|Failed to construct session|ERR_[A-Z_]+|npm ERR!)/i.test(
+      result.stderr ?? ""
+    );
+
+  if (result.code !== 0 || applicationFailure) {
     throw new Error(
       [
         `Command failed with code ${result.code}`,

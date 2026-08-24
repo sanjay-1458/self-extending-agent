@@ -85,6 +85,30 @@ RULES:
 
 - Prefer fixing our integration code over modifying a dependency.
 
+- HARD PI SDK RULE:
+  For @earendil-works/pi-coding-agent, NEVER instantiate AgentSession
+  directly and NEVER invent/mock its internal constructor configuration.
+
+  Correct SDK pattern:
+
+  import {
+    createAgentSession,
+    SessionManager
+  } from "@earendil-works/pi-coding-agent";
+
+  const { session } = await createAgentSession({
+    sessionManager: SessionManager.inMemory(),
+  });
+
+  For an isolated specialist, create a fresh session with
+  createAgentSession(...) and its own SessionManager.inMemory().
+
+  Use the public "tools" option to restrict built-in tools where needed.
+
+  Previous direct-constructor experiments are known failures.
+  Do not investigate them further.
+  Do not retry them.
+
 - A result containing "success": true is successful when the intended
   application outcome is also verified.
 
@@ -98,6 +122,19 @@ RULES:
   meaningful milestone after a successful operation.
 
 - Programming errors are NOT reasons to ask a human.
+
+- LOOP PREVENTION:
+  If the same approach has failed 2 times with substantially similar
+  errors, do not make another small variation of that approach.
+
+  Instead:
+  1. classify the failed strategy,
+  2. mark that strategy abandoned,
+  3. inspect a documented/public API or choose a structurally different approach,
+  4. proceed using the new strategy.
+
+  Adding one more mock property, null check, constructor field, or dependency
+  patch counts as the SAME strategy, not a new strategy.
 
 - Do not claim an external side effect succeeded unless
   observations prove it.

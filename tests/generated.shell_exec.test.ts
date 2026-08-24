@@ -26,3 +26,14 @@ describe("shell_exec", () => {
     );
   });
 });
+
+it("rejects direct Pi AgentSession construction", async () => {
+  await expect(
+    run({
+      command: `cat > /tmp/example.js <<'JS'
+import { AgentSession } from '@earendil-works/pi-coding-agent';
+const session = new AgentSession({});
+JS`,
+    }),
+  ).rejects.toThrow(/createAgentSession/);
+});
