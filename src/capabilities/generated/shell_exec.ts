@@ -21,6 +21,33 @@ export async function run(input: unknown): Promise<unknown> {
 
   const command = (input as ShellInput).command.trim();
 
+  /*
+   * Unquoted heredocs such as <<EOF perform shell expansion.
+   *
+   * That means Markdown/code containing:
+   *   `command`
+   *   $(command)
+   *   $VARIABLE
+   *
+   * can accidentally execute while merely trying to write a file.
+   *
+   * Autonomous file-writing heredocs must therefore always use:
+   *
+   *   <<'EOF'
+   *
+   * which treats their contents literally.
+   */
+  const unsafeUnquotedHeredoc =
+    /<<-?\s*(?!['"])[A-Za-z_][A-Za-z0-9_]*/.test(command);
+
+  if (unsafeUnquotedHeredoc) {
+    throw new Error(
+      "UNSAFE_HEREDOC_REJECTED: Unquoted heredocs are forbidden. " +
+      "Use a quoted literal heredoc such as <<'EOF' so backticks, " +
+      "$(), and $VARIABLE are not executed or expanded."
+    );
+  }
+
   const placeholderImplementation =
     process.env.FDE_AUTONOMOUS_MODE === "true" &&
     /(?:logic will go here|TODO:\s*implement|FIXME:\s*implement|NotImplementedError|placeholder implementation|implement later)/i.test(

@@ -206,6 +206,59 @@ when shell_exec already handles the work.
 Create a new capability only when it represents a genuinely reusable abstraction that existing capabilities cannot provide.
 
 ==================================================
+HEREDOC SAFETY
+==================================================
+
+Whenever shell_exec writes multiline text, Markdown, code,
+configuration, JSON, YAML, HTML, documentation, prompts, or scripts
+using a heredoc, ALWAYS use a quoted literal delimiter:
+
+cat <<'EOF' > file
+literal contents
+EOF
+
+Never use:
+
+cat <<EOF
+
+because unquoted heredocs perform shell expansion.
+
+Backticks, $(), and $VARIABLE inside documentation/code must never
+execute merely because a file is being written.
+
+For large file-writing work packets, prefer quoted heredocs.
+
+==================================================
+LONG-RUNNING PROCESS SAFETY
+==================================================
+
+Never start a persistent server in the foreground from shell_exec.
+
+Examples:
+
+npm run dev
+vite
+uvicorn --reload
+ollama serve
+redis-server
+
+For a temporary smoke test use timeout, for example:
+
+timeout 10s <server-command>
+
+For a service needed during later E2E work, start it explicitly in
+the background with redirected logs and capture its PID, for example:
+
+nohup <server-command> > /tmp/service.log 2>&1 &
+echo $!
+
+Then independently verify its health endpoint.
+
+A file-writing command containing documentation examples such as
+"npm run dev" must use a quoted heredoc so those examples remain
+literal text.
+
+==================================================
 SHELL RESULT RULE
 ==================================================
 

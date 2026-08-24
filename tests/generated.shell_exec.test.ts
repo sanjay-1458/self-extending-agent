@@ -37,3 +37,30 @@ JS`,
     }),
   ).rejects.toThrow(/createAgentSession/);
 });
+
+it("rejects unquoted heredocs", async () => {
+  await expect(
+    run({
+      command: [
+        "cat <<EOF > unsafe.md",
+        "# Example",
+        "`echo SHOULD_NOT_EXECUTE`",
+        "EOF",
+      ].join("\n"),
+    }),
+  ).rejects.toThrow(/UNSAFE_HEREDOC_REJECTED/);
+});
+
+it("allows quoted literal heredocs", async () => {
+  const result = await run({
+    command: [
+      "cat <<'EOF' > /tmp/safe-heredoc-test.md",
+      "# Example",
+      "`echo SHOULD_NOT_EXECUTE`",
+      "EOF",
+      "grep -F 'SHOULD_NOT_EXECUTE' /tmp/safe-heredoc-test.md",
+    ].join("\n"),
+  });
+
+  expect(result).toBeTruthy();
+});
