@@ -28,7 +28,7 @@ function resultText(value: unknown) {
   catch { return String(value).slice(0, 10_000); }
 }
 
-export async function runAgent(task: AgentTask, maxTurns = 30): Promise<AgentTask> {
+export async function runAgent(task: AgentTask, maxTurns = Math.max(30, Number.parseInt(process.env.AGENT_MAX_TURNS ?? "250", 10) || 250)): Promise<AgentTask> {
   task.status = "RUNNING";
   task.blocker = undefined;
   await saveTask(task);

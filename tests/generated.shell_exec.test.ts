@@ -1,24 +1,28 @@
-import { describe, it, expect, vi } from 'vitest';
-import { run } from '../src/capabilities/generated/shell_exec.js';
+import { describe, expect, it } from "vitest";
+import { run } from "../src/capabilities/generated/shell_exec.js";
 
-// Mocking child_process since we cannot actually run arbitrary shells in the test environment
-vi.mock('node:child_process', () => ({
-  spawn: vi.fn(() => ({
-    stdout: { on: vi.fn((event, cb) => event === 'data' && cb('hello world')) },
-    stderr: { on: vi.fn() },
-    on: vi.fn((event, cb) => {
-      if (event === 'close') cb(0);
-    }),
-  })),
-}));
+describe("shell_exec", () => {
+  it("executes commands and returns explicit success", async () => {
+    const result = await run({
+      command: "printf 'SHELL_OK'",
+    }) as {
+      success: boolean;
+      exitCode: number;
+      stdout: string;
+      cwd: string;
+    };
 
-describe('shell_exec', () => {
-  it('should execute a simple echo command', async () => {
-    const result = await run('echo hello world');
-    expect(result).toBe('hello world');
+    expect(result.success).toBe(true);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe("SHELL_OK");
+    expect(result.cwd).toBe(
+      "/home/daytona/workspace/lenny-growth-assistant",
+    );
   });
 
-  it('should throw an error for invalid input', async () => {
-    await expect(run(123)).rejects.toThrow();
+  it("rejects invalid input", async () => {
+    await expect(run({})).rejects.toThrow(
+      "non-empty command",
+    );
   });
 });

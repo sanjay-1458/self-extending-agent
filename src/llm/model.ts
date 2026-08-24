@@ -8,6 +8,6 @@ export function createModel() {
   return new ChatGoogle({
     apiKey,
     model: env.geminiModel,
-    maxRetries: 2,
+    maxRetries: 0,
   });
 }

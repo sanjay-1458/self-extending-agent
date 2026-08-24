@@ -1,42 +1,54 @@
-import { spawn } from 'node:child_process';
-import path from 'node:path';
+import { runCommand } from "../../primitives/shell.js";
+
+const TARGET_DIR =
+  "/home/daytona/workspace/lenny-growth-assistant";
+
+type ShellInput = {
+  command: string;
+};
 
 export async function run(input: unknown): Promise<unknown> {
-  const command = typeof input === 'string' ? input : (input as { command: string }).command;
-  
-  if (!command || typeof command !== 'string') {
-    throw new Error('Input must be a string command or an object with a command property.');
+  if (
+    !input ||
+    typeof input !== "object" ||
+    typeof (input as ShellInput).command !== "string" ||
+    !(input as ShellInput).command.trim()
+  ) {
+    throw new Error(
+      "Input must be an object with a non-empty command string.",
+    );
   }
 
-  const WORKSPACE_DIR = '/home/daytona/workspace/lenny-growth-assistant';
+  const command = (input as ShellInput).command.trim();
 
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, {
-      shell: true,
-      cwd: WORKSPACE_DIR,
-    });
+  const result = await runCommand(
+    "/bin/bash",
+    ["-lc", command],
+    {
+      cwd: TARGET_DIR,
+      timeoutMs: 300_000,
+      permission: "shell_access",
+    },
+  );
 
-    let stdout = '';
-    let stderr = '';
+  if (result.code !== 0) {
+    throw new Error(
+      [
+        `Command failed with code ${result.code}`,
+        result.stderr,
+        result.stdout,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }
 
-    child.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    child.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    child.on('close', (code) => {
-      if (code !== 0) {
-        reject(new Error(`Command failed with code ${code}: ${stderr}`));
-      } else {
-        resolve(stdout.trim());
-      }
-    });
-
-    child.on('error', (err) => {
-      reject(err);
-    });
-  });
+  return {
+    success: true,
+    exitCode: result.code,
+    cwd: TARGET_DIR,
+    command,
+    stdout: result.stdout,
+    stderr: result.stderr,
+  };
 }
